@@ -1,0 +1,56 @@
+# 六个模型的统一训练基准
+# train/train_yolo.py 与 train/train_torchvision.py 逐模型读取本文件训练。
+#
+# 训练预算的公平性原则:
+#   统一 batch=16 + 统一 epochs=150 ⇒ 六个模型的梯度步数与数据通过次数同时相等
+#   （train ≈ 2.4k 张 → ~149 iter/epoch → ~22.3k 步/模型）
+#   全模型 patience=50 早停 + 保存 val mAP@0.5:0.95 最优权重，保证无模型欠训练
+#   降级规则: 显存不足时 batch 减半——SGD 侧 lr 按线性缩放规则同步减半；降级必须写进报告
+
+common:
+  seed: 0
+  imgsz: 640        # 统一输入边长（torchvision 侧语义为“短边 640”）
+  batch: 16         # 全体一致 ⇒ 每 epoch 梯度步数一致
+  epochs: 150
+  patience: 50      # 连续 50 epoch 无提升即提前终止（ultralytics 官方默认 patience=100，在 150 预算内≈从不早停，故收紧）
+                    # 「提升」判定两套框架统一：fitness = 0.1·mAP@0.5 + 0.9·mAP@0.5:0.95（与 ultralytics 口径一致）
+  workers: 8
+  project: runs     # ultralytics 训练输出根目录
+
+models:
+  # ---------- ultralytics 侧（YOLO 系 + RT-DETR）----------
+  # batch/epochs/patience 继承 common；优化器用框架默认并在 runs/<model>/args.yaml 留档
+  yolov8s:
+    framework: ultralytics
+    weights: yolov8s.pt        # COCO 预训练
+    extra: {close_mosaic: 10}
+
+  yolov10s:
+    framework: ultralytics
+    weights: yolov10s.pt
+    extra: {close_mosaic: 10}
+
+  yolo11s:
+    framework: ultralytics
+    weights: yolo11s.pt
+    extra: {close_mosaic: 10}
+
+  rtdetr_l:
+    framework: ultralytics
+    weights: rtdetr-l.pt       # 六者中最吃显存：batch 16 若 OOM → 降 8 并记录（AdamW，lr 不动）
+    extra: {deterministic: false}   # 官方建议：deformable attention 无确定性反向，关掉提速
+
+  # ---------- torchvision 侧（两阶段 / anchor-based 单阶段）----------
+  # SGD momentum=0.9, cosine 退火 + 500 iter 热身, AMP 混合精度
+  # 降级规则: batch 减半时 lr 同步减半（线性缩放，0.005→0.0025）
+  fasterrcnn_r50_fpn:
+    framework: torchvision
+    weights: fasterrcnn_resnet50_fpn   # 加载 COCO 预训练权重，检测头换成 num_classes=2
+    lr: 0.005
+    amp: true
+
+  retinanet_r50_fpn:
+    framework: torchvision
+    weights: retinanet_resnet50_fpn
+    lr: 0.005
+    amp: true

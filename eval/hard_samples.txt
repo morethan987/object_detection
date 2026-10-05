@@ -1,0 +1,7 @@
+# 硬样本清单：tools/render_compare.py 的输入（homework.md §13）
+# 格式：一行一张图（相对 data/yolo/images/test/ 的路径），行尾 # 后为场景标签
+# 场景标签：small（小目标）| overlap（重叠/密集裂缝）| glare_lowcontrast（强反光/低对比度）
+# 挑选要求：三类场景各 ≥4 张，共 ≥12 张，全部来自 test split
+#
+# 示例（划分完成后替换为真实样本）:
+# 20160222_081031_641_721.jpg  # overlap
