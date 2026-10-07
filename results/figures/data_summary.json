@@ -1,0 +1,25 @@
+{
+  "dataset_file": "data/coco/annotations/train.json",
+  "total_images": 2383,
+  "background_images": 0,
+  "background_ratio_pct": 0.0,
+  "total_instances": 3945,
+  "instances_per_image": {
+    "mean": 1.66,
+    "median": 1.0,
+    "max": 9
+  },
+  "aspect_ratio_elongation": {
+    "mean": 3.84,
+    "median": 3.08,
+    "p90": 6.99
+  },
+  "coco_size_distribution": {
+    "small_count": 481,
+    "small_pct": 12.19,
+    "medium_count": 943,
+    "medium_pct": 23.9,
+    "large_count": 2521,
+    "large_pct": 63.9
+  }
+}

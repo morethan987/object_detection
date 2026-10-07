@@ -19,20 +19,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 from PIL import Image, UnidentifiedImageError
 
+from .utils import DATA_DIR, DATASET_PAIRS, IMG_EXTENSIONS, SUBSETS
+
 # 配置无 GUI 环境下的 Matplotlib 后端
 matplotlib.use("Agg")
 
 REPO_URL = "https://github.com/guoguolord/crackDataset"
-DATA_DIR = Path("data/raw/crackDataset")
-SUBSETS = ["crack500", "AsphaltCrack300", "CFD"]
-IMG_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
-
-# 数据集子文件夹配对结构
-DATASET_PAIRS = {
-    "crack500": [("train", "label"), ("val", "val_label")],
-    "AsphaltCrack300": [("train", "label")],
-    "CFD": [("train", "label"), ("val", "val_label")],
-}
 
 
 @dataclass
