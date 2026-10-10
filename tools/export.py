@@ -206,7 +206,10 @@ def main():
 
     # 生成 Ultralytics crack.yaml 配置文件
     crack_yaml = out_dir / "crack.yaml"
-    yaml_text = "path: ./yolo\ntrain: images/train\nval: images/val\ntest: images/test\n\nnames:\n  0: crack\n"
+    yolo_abs_path = (out_dir / "yolo").resolve()
+    yaml_text = (
+        f"path: {yolo_abs_path}\ntrain: images/train\nval: images/val\ntest: images/test\n\nnames:\n  0: crack\n"
+    )
     with open(crack_yaml, "w", encoding="utf-8") as f:
         f.write(yaml_text)
 

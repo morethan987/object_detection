@@ -23,22 +23,29 @@ models:
   yolov8s:
     framework: ultralytics
     weights: yolov8s.pt        # COCO 预训练
-    extra: {close_mosaic: 10}
+    extra:
+      close_mosaic: 10
 
   yolov10s:
     framework: ultralytics
     weights: yolov10s.pt
-    extra: {close_mosaic: 10}
+    extra:
+      close_mosaic: 10
 
   yolo11s:
     framework: ultralytics
     weights: yolo11s.pt
-    extra: {close_mosaic: 10}
+    extra:
+      close_mosaic: 10
 
   rtdetr_l:
     framework: ultralytics
-    weights: rtdetr-l.pt       # 六者中最吃显存：batch 16 若 OOM → 降 8 并记录（AdamW，lr 不动）
-    extra: {deterministic: false}   # 官方建议：deformable attention 无确定性反向，关掉提速
+    weights: rtdetr-l.pt
+    extra:
+      deterministic: false   # 官方建议：deformable attention 无确定性反向，关掉提速
+      amp: false # 禁用混合精度，容易NaN
+      optimizer: AdamW
+      lr0: 0.0001
 
   # ---------- torchvision 侧（两阶段 / anchor-based 单阶段）----------
   # SGD momentum=0.9, cosine 退火 + 500 iter 热身, AMP 混合精度
