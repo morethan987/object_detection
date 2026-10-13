@@ -1,0 +1,23 @@
+{
+  "model_pred_file": "/root/autodl-tmp/object_detection/runs/retinanet_r50_fpn/predict_coco.json",
+  "gt_file": "/root/autodl-tmp/object_detection/data/coco/annotations/test.json",
+  "coco_eval_standard": {
+    "mAP_50_95": 0.3107,
+    "mAP_50": 0.5678,
+    "mAP_75": 0.2985,
+    "AP_s": 0.0104,
+    "AP_m": 0.126,
+    "AP_l": 0.4297,
+    "AR_max_300": 0.4359
+  },
+  "engineering_metrics": {
+    "conf_threshold": 0.25,
+    "iou_threshold": 0.5,
+    "precision": 0.4927,
+    "recall": 0.6496,
+    "f1": 0.5604,
+    "tp": 712,
+    "fp": 733,
+    "fn": 384
+  }
+}

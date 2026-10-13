@@ -1,0 +1,23 @@
+{
+  "model_pred_file": "/root/autodl-tmp/object_detection/runs/fasterrcnn_r50_fpn/predict_coco.json",
+  "gt_file": "/root/autodl-tmp/object_detection/data/coco/annotations/test.json",
+  "coco_eval_standard": {
+    "mAP_50_95": 0.3593,
+    "mAP_50": 0.6215,
+    "mAP_75": 0.3718,
+    "AP_s": 0.014,
+    "AP_m": 0.151,
+    "AP_l": 0.4922,
+    "AR_max_300": 0.4943
+  },
+  "engineering_metrics": {
+    "conf_threshold": 0.25,
+    "iou_threshold": 0.5,
+    "precision": 0.3045,
+    "recall": 0.7062,
+    "f1": 0.4255,
+    "tp": 774,
+    "fp": 1768,
+    "fn": 322
+  }
+}

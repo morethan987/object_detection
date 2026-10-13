@@ -99,33 +99,35 @@ def run_inference(
     print(f"[*] 正在加载模型权重: {weights_path}")
     model = instantiate_model(str(weights_path), model_name)
 
-    # 3. 收集测试图片路径
+    # 3. 检查测试图片目录
     supported_exts = {".jpg", ".jpeg", ".png", ".bmp"}
     img_paths = [p for p in img_dir.iterdir() if p.suffix.lower() in supported_exts]
     if not img_paths:
         sys.exit(f"[错误] 在目录 {img_dir} 中未找到任何支持的图片文件！")
     print(f"[*] 准备对 {len(img_paths)} 张测试图片进行批量推理...")
 
-    # 4. 执行推理
-    # conf 设置为 0.001 是标准学术评测操作，保证保留足够的候选框以供精准绘制 PR 曲线
+    # 4. 执行流式推理 (stream=True 边预测边消费，显存恒定保持在最低)
     predict_args: dict[str, Any] = {
-        "source": img_paths,
+        "source": str(img_dir),
         "imgsz": imgsz,
         "conf": conf_thresh,
         "batch": batch,
+        "stream": True,
         "verbose": False,
         "save": False,
     }
     if device:
         predict_args["device"] = device
 
-    results = model.predict(**predict_args)
+    # model.predict 返回的是一个 generator，不会一次性在显存里堆满结果
+    results_generator = model.predict(**predict_args)
 
     # 5. 格式转换：从 Ultralytics Results 转为 COCO 评测格式列表
     coco_predictions: list[dict[str, Any]] = []
     skipped_count = 0
 
-    for r in results:
+    # 逐张消费，处理完一张即时释放其显存
+    for r in results_generator:
         img_file_name = Path(r.path).name
         if img_file_name not in name_to_id:
             skipped_count += 1
@@ -137,7 +139,7 @@ def run_inference(
         if boxes is None or len(boxes) == 0:
             continue
 
-        # 提取 xyxy 坐标 (Tensor/Numpy -> List)
+        # 提取 xyxy 坐标并移至 CPU
         xyxy_boxes = boxes.xyxy.cpu().numpy()
         scores = boxes.conf.cpu().numpy()
 

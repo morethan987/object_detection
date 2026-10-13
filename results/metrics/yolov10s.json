@@ -1,0 +1,23 @@
+{
+  "model_pred_file": "/root/autodl-tmp/object_detection/runs/yolov10s/predict_coco.json",
+  "gt_file": "/root/autodl-tmp/object_detection/data/coco/annotations/test.json",
+  "coco_eval_standard": {
+    "mAP_50_95": 0.3204,
+    "mAP_50": 0.521,
+    "mAP_75": 0.3394,
+    "AP_s": 0.0026,
+    "AP_m": 0.0788,
+    "AP_l": 0.4617,
+    "AR_max_300": 0.4379
+  },
+  "engineering_metrics": {
+    "conf_threshold": 0.25,
+    "iou_threshold": 0.5,
+    "precision": 0.6375,
+    "recall": 0.5119,
+    "f1": 0.5678,
+    "tp": 561,
+    "fp": 319,
+    "fn": 535
+  }
+}

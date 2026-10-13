@@ -6,6 +6,17 @@ uv run python eval/eval_coco.py \
     --pred runs/yolo11s/predict_coco.json \
     --out results/metrics/yolo11s.json
 
+for model in fasterrcnn_r50_fpn retinanet_r50_fpn rtdetr_l yolo11s yolov10s yolov8s; do
+    echo "========================================"
+    echo "[*] Evaluating: ${model}..."
+    echo "========================================"
+    
+    uv run python eval/eval_coco.py \
+        --gt data/coco/annotations/test.json \
+        --pred runs/${model}/predict_coco.json \
+        --out results/metrics/${model}.json
+done
+
 口径说明:
     1. 学术标准口径: pycocotools COCOeval, max_det=300, score 阈值 0.05 起评
        产出: mAP@0.5 / mAP@0.5:0.95 / AP_S / AP_M / AP_L
@@ -191,7 +202,7 @@ def run_evaluation(
         with redirect_stdout(io.StringIO()):
             coco_dt = coco_gt.loadRes(coco_preds)
             coco_eval = COCOeval(coco_gt, coco_dt, iouType="bbox")
-            coco_eval.params.maxDets = [1, 10, 300]  # 严格对齐 handout: max_det=300
+            coco_eval.params.maxDets = [1, 10, 100, 300]  # 严格对齐 handout: max_det=300
             coco_eval.evaluate()
             coco_eval.accumulate()
             coco_eval.summarize()

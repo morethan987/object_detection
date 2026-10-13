@@ -1,0 +1,122 @@
+{
+  "yolov8s": {
+    "params_m": 11.14,
+    "gflops": 28.64,
+    "fp32": {
+      "mean_ms": 2.715,
+      "std_ms": 0.267,
+      "fps": 368.29
+    },
+    "fp16": {
+      "mean_ms": 2.82,
+      "std_ms": 0.228,
+      "fps": 354.59
+    },
+    "bf16": {
+      "mean_ms": 2.93,
+      "std_ms": 0.557,
+      "fps": 341.31
+    },
+    "notes": "原生前向; 融合算子; 纯静态显式转换"
+  },
+  "yolov10s": {
+    "params_m": 8.07,
+    "gflops": 24.89,
+    "fp32": {
+      "mean_ms": 3.43,
+      "std_ms": 0.313,
+      "fps": 291.55
+    },
+    "fp16": {
+      "mean_ms": 3.674,
+      "std_ms": 0.56,
+      "fps": 272.16
+    },
+    "bf16": {
+      "mean_ms": 3.579,
+      "std_ms": 0.421,
+      "fps": 279.42
+    },
+    "notes": "原生前向; 融合算子; 纯静态显式转换"
+  },
+  "yolo11s": {
+    "params_m": 9.43,
+    "gflops": 21.67,
+    "fp32": {
+      "mean_ms": 3.921,
+      "std_ms": 0.764,
+      "fps": 255.04
+    },
+    "fp16": {
+      "mean_ms": 3.973,
+      "std_ms": 0.589,
+      "fps": 251.67
+    },
+    "bf16": {
+      "mean_ms": 3.907,
+      "std_ms": 0.335,
+      "fps": 255.95
+    },
+    "notes": "原生前向; 融合算子; 纯静态显式转换"
+  },
+  "rtdetr_l": {
+    "params_m": 32.81,
+    "gflops": 109.89,
+    "fp32": {
+      "mean_ms": 25.495,
+      "std_ms": 1.116,
+      "fps": 39.22
+    },
+    "fp16": {
+      "mean_ms": 26.292,
+      "std_ms": 0.588,
+      "fps": 38.03
+    },
+    "bf16": {
+      "mean_ms": 26.203,
+      "std_ms": 0.899,
+      "fps": 38.16
+    },
+    "notes": "原生前向; 融合算子; 纯静态显式转换"
+  },
+  "fasterrcnn_r50_fpn": {
+    "params_m": 41.3,
+    "gflops": 90.71,
+    "fp32": {
+      "mean_ms": 11.456,
+      "std_ms": 2.016,
+      "fps": 87.29
+    },
+    "fp16": {
+      "mean_ms": 10.461,
+      "std_ms": 1.966,
+      "fps": 95.59
+    },
+    "bf16": {
+      "mean_ms": 11.69,
+      "std_ms": 1.015,
+      "fps": 85.54
+    },
+    "notes": "torchvision 架构; forward 内含 RPN 与 RoI-NMS"
+  },
+  "retinanet_r50_fpn": {
+    "params_m": 32.17,
+    "gflops": 81.15,
+    "fp32": {
+      "mean_ms": 10.74,
+      "std_ms": 2.95,
+      "fps": 93.11
+    },
+    "fp16": {
+      "mean_ms": 10.507,
+      "std_ms": 1.981,
+      "fps": 95.17
+    },
+    "bf16": {
+      "mean_ms": 12.541,
+      "std_ms": 2.335,
+      "fps": 79.74
+    },
+    "notes": "torchvision 架构; forward 内含 RPN 与 RoI-NMS"
+  }
+}

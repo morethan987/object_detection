@@ -1,7 +1,7 @@
 """
 ultralytics 侧训练入口：YOLOv8s / YOLOv10s / YOLO11s / RT-DETR-L
 
-uv run python train/train_yolo.py --config configs/models.yaml --models yolo11s
+uv run python train/train_yolo.py --config configs/models.yaml --models rtdetr_l
 
 读取  configs/models.yaml（唯一超参来源，勿在命令行散落覆盖）
 数据  data/crack.yaml（由 tools/export.py 生成）

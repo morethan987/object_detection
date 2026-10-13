@@ -53,12 +53,13 @@ object_detection/
 │   └── models.yaml           # 六模型的统一训练基准（handout §10 的机器可读版，唯一超参来源）
 │
 ├── tools/                    # 预处理与可视化脚本（按 handout §8 顺序执行）
-│   ├── prepare_data.py       # ① 拉取原始数据集 → data/raw/，校验 3403 对文件
-│   ├── mask2bbox.py          # ② 掩码→检测框（§8.1 核心：二值化>0 → 闭运算 → 连通域 → 过滤）
-│   ├── split.py              # ③ 按“原图 ID”分组划分 7:1:2 → splits/（防泄漏，§8.3）
-│   ├── export.py             # ④ 导出 YOLO txt + COCO json + crack.yaml（§8.4）
-│   ├── analyze.py            # ⑤ 数据统计图：实例数/长宽比/目标尺寸分桶（§8.2）
-│   └── render_compare.py     # ⑦ 硬样本并排渲染：GT + 6 模型网格（§13）
+│   ├── prepare_data.py       # 拉取原始数据集 → data/raw/，校验 3403 对文件
+│   ├── mask2bbox.py          # 掩码→检测框（§8.1 核心：二值化>0 → 闭运算 → 连通域 → 过滤）
+│   ├── split.py              # 按“原图 ID”分组划分 7:1:2 → splits/（防泄漏，§8.3）
+│   ├── export.py             # 导出 YOLO txt + COCO json + crack.yaml（§8.4）
+│   ├── analyze.py            # 数据统计图：实例数/长宽比/目标尺寸分桶（§8.2）
+│   ├── find_hard_samples.py  # 选择硬样本
+│   └── render_compare.py     # 硬样本并排渲染：GT + 6 模型网格（§13）
 │
 ├── train/                    # 训练入口（两套框架，§10）
 │   ├── train_yolo.py         # ultralytics：YOLOv8s / YOLOv10s / YOLO11s / RT-DETR-L
@@ -66,9 +67,11 @@ object_detection/
 │
 ├── eval/                     # 统一评测（§11，公平性命门）
 │   ├── eval_coco.py          # 全模型预测 → COCO json → 同一份 COCOeval（mAP50/50:95/APS-M-L + P/R）
+│   ├── infer_yolo.py         # 在测试集上运行 yolo 类模型
+│   ├── infer_torchvision.py  # 在测试集上运行 torchvision 类模型
 │   ├── benchmark.py          # Params / GFLOPs / 时延（batch=1, 预热50+计时300, fp32&fp16）
 │   ├── summarize.py          # 汇总 → results/summary.csv + speed-accuracy 散点图
-│   └── hard_samples.txt      # 硬样本清单（人工挑选：小目标/重叠/反光低对比各≥4 张）
+│   └── hard_samples.txt      # 硬样本清单（小目标/重叠/反光低对比各≥4 张）
 │
 ├── results/                  # 【进 git】最终交付素材：summary.csv、figures/（报告直接引用）
 │
@@ -111,12 +114,32 @@ uv run python train/train_yolo.py --config configs/models.yaml --models yolo11s
 uv run python train/train_yolo.py --config configs/models.yaml --models yolov8s yolov10s rtdetr_l
 uv run python train/train_torchvision.py --config configs/models.yaml --models fasterrcnn_r50_fpn retinanet_r50_fpn
 
-# 统一评测 + 基准 + 汇总（对每个模型执行 eval_coco；随后汇总）
+# 统一测评
+# 推理 yolo
+for model in yolov8s yolov10s yolo11s rtdetr_l; do
+    echo "[*] Infering: ${model}..."
+    uv run python eval/infer_yolo.py \
+        --model-name ${model} \
+        --weights runs/${model}/weights/best.pt \
+        --test-json data/coco/annotations/test.json \
+        --img-dir data/yolo/images/test \
+        --out runs/${model}/predict_coco.json
+done
+
+# 推理 torchvision
+uv run python eval/infer_torchvision.py --model-name fasterrcnn_r50_fpn retinanet_r50_fpn
+
+# 推理速度测评
 uv run python eval/eval_coco.py --gt data/coco/annotations/test.json --pred runs/yolo11s/predict_coco.json --out results/metrics/yolo11s.json
 uv run python eval/benchmark.py --config configs/models.yaml --out results/benchmark.json
+
+# 计算硬样本
+uv run tools/find_hard_samples.py
+
+# 测评汇总
 uv run python eval/summarize.py --metrics results/metrics --bench results/benchmark.json --out results/summary.csv
 
-# 硬样本可视化（先人工填 eval/hard_samples.txt）
+# 硬样本可视化
 uv run python tools/render_compare.py --list eval/hard_samples.txt --runs runs --out results/figures/qualitative
 ```
 

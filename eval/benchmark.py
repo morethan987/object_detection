@@ -1,20 +1,11 @@
 """
-参数量 / GFLOPs / 推理时延基准测试脚本
+参数量 / GFLOPs / 推理时延基准测试脚本 (支持 FP32 / FP16 原生 / BF16 原生)
 
-用法示例:
-    uv run python eval/benchmark.py --config configs/models.yaml --out results/benchmark.json
-
-口径说明:
-    1. Params / GFLOPs: 统一 640x640 输入尺寸
-       - Ultralytics 侧: 模型原生 info(imgsz=640)，YOLOv10 采用融合后单预测头口径
-       - Torchvision 侧: thop.profile 统计
-    2. Latency / FPS:
-       - 硬件: 单 GPU, Batch=1, 预热 50 次 + 计时 300 次计算 mean ± std
-       - 精度: FP32 与 FP16 (autocast) 分开测定
-       - FPS: 1000.0 / latency_ms
+uv run python eval/benchmark.py --config configs/models.yaml --out results/benchmark.json
 """
 
 import argparse
+import copy
 import json
 import sys
 from pathlib import Path
@@ -24,18 +15,18 @@ import torch
 import yaml
 from torchvision.models import detection
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.retinanet import RetinaNetClassificationHead
 from ultralytics import RTDETR, YOLO
 
 
 # ==============================================================================
-# 1. 核心计时工具（纯粹、直接）
+# 1. 核心纯净计时工具
 # ==============================================================================
-def measure_latency(forward_fn, use_fp16: bool, warmup: int = 50, runs: int = 300) -> dict[str, float]:
-    """使用 CUDA Event 掐表测定纯前向耗时 (ms) 与 FPS"""
+def measure_latency(forward_fn, warmup: int = 50, runs: int = 300) -> dict[str, float]:
+    """使用 CUDA Event 掐表测定纯前向耗时 (ms) 与 FPS，杜绝任何外部上下文干扰"""
     # 预热
     for _ in range(warmup):
-        with torch.autocast("cuda", dtype=torch.float16, enabled=use_fp16):
-            forward_fn()
+        forward_fn()
     torch.cuda.synchronize()
 
     # 正式计时
@@ -45,8 +36,7 @@ def measure_latency(forward_fn, use_fp16: bool, warmup: int = 50, runs: int = 30
 
     for _ in range(runs):
         start.record()
-        with torch.autocast("cuda", dtype=torch.float16, enabled=use_fp16):
-            forward_fn()
+        forward_fn()
         end.record()
         torch.cuda.synchronize()
         latencies.append(start.elapsed_time(end))
@@ -73,22 +63,39 @@ def benchmark_ultralytics(name: str, root: Path, device: torch.device, imgsz: in
     _, params, _, gflops = model.info(detailed=False, imgsz=imgsz)
     model.fuse()
 
-    # 2. 获取底层真实 PyTorch 网络（一行断言满足 LSP 类型安全）
     assert isinstance(model.model, torch.nn.Module), f"{name} 底层网络初始化失败"
-    net = model.model.to(device).eval()
+    net_fp32 = model.model.to(device).eval()
 
-    dummy = torch.randn(1, 3, imgsz, imgsz, device=device)
+    # 2. 原生 FP32 测定
+    dummy_fp32 = torch.rand(1, 3, imgsz, imgsz, device=device, dtype=torch.float32)
 
-    def forward_fn():
+    def forward_fp32():
         with torch.inference_mode():
-            return net(dummy)
+            return net_fp32(dummy_fp32)
+
+    # 3. 原生 FP16 (直接半精度化，激活 Tensor Core 极限)
+    net_fp16 = copy.deepcopy(net_fp32).half()
+    dummy_fp16 = dummy_fp32.half()
+
+    def forward_fp16():
+        with torch.inference_mode():
+            return net_fp16(dummy_fp16)
+
+    # 4. 原生 BF16 (对比测试)
+    net_bf16 = copy.deepcopy(net_fp32).bfloat16()
+    dummy_bf16 = dummy_fp32.bfloat16()
+
+    def forward_bf16():
+        with torch.inference_mode():
+            return net_bf16(dummy_bf16)
 
     return {
         "params_m": round(params / 1e6, 2),
         "gflops": round(float(gflops), 2),
-        "fp32": measure_latency(forward_fn, use_fp16=False),
-        "fp16": measure_latency(forward_fn, use_fp16=True),
-        "notes": "原生 forward; 融合算子; 无外部 CPU-NMS",
+        "fp32": measure_latency(forward_fp32),
+        "fp16": measure_latency(forward_fp16),
+        "bf16": measure_latency(forward_bf16),
+        "notes": "原生前向; 融合算子; 纯静态显式转换",
     }
 
 
@@ -97,42 +104,104 @@ def benchmark_ultralytics(name: str, root: Path, device: torch.device, imgsz: in
 # ==============================================================================
 def benchmark_torchvision(name: str, root: Path, device: torch.device, imgsz: int = 640):
     if "fasterrcnn" in name:
-        net = detection.fasterrcnn_resnet50_fpn(weights="DEFAULT")
+        net = detection.fasterrcnn_resnet50_fpn(
+            weights=None,
+            weights_backbone=None,
+            min_size=imgsz,
+            max_size=imgsz,
+        )
         in_feat = net.roi_heads.box_predictor.cls_score.in_features
         net.roi_heads.box_predictor = FastRCNNPredictor(in_feat, num_classes=2)
+    elif "retinanet" in name:
+        net = detection.retinanet_resnet50_fpn(
+            weights=None,
+            weights_backbone=None,
+            min_size=imgsz,
+            max_size=imgsz,
+        )
+        num_anchors = net.head.classification_head.num_anchors
+        in_channels = net.backbone.out_channels
+        net.head.classification_head = RetinaNetClassificationHead(
+            in_channels=in_channels,
+            num_anchors=num_anchors,
+            num_classes=2,
+        )
     else:
-        net = detection.retinanet_resnet50_fpn(weights="DEFAULT", num_classes=2)
+        raise ValueError(f"未知的 torchvision 模型: {name}")
 
-    # 若有微调好的权重则加载
-    ckpt = root / f"runs/{name}/best.pth"
-    if ckpt.exists():
-        state = torch.load(ckpt, map_location="cpu")
-        net.load_state_dict(state.get("model", state))
+    weight_candidates = [
+        root / f"runs/{name}/weights/best.pt",
+        root / f"runs/{name}/weights/best.pth",
+        root / f"weights/{name}.pt",
+        root / f"weights/{name}.pth",
+    ]
+    ckpt_path = next((p for p in weight_candidates if p.exists()), None)
+    if ckpt_path:
+        checkpoint = torch.load(ckpt_path, map_location="cpu")
+        state_dict = checkpoint.get("model_state_dict", checkpoint.get("model", checkpoint))
+        net.load_state_dict(state_dict)
+        print(f"[*] 成功加载本地权重: {ckpt_path.relative_to(root)}")
 
-    net = net.to(device).eval()
+    net_fp32 = net.to(device).eval()
 
-    # 统计参数量与 GFLOPs
-    params_m = round(sum(p.numel() for p in net.parameters()) / 1e6, 2)
-    dummy_input = [torch.randn(3, imgsz, imgsz, device=device)]
+    # 统计参数与 GFLOPs
+    params_m = round(sum(p.numel() for p in net_fp32.parameters()) / 1e6, 2)
+    dummy_fp32 = [torch.rand(3, imgsz, imgsz, device=device, dtype=torch.float32)]
 
     gflops = None
     try:
         import thop
 
-        flops, _ = thop.profile(net, inputs=(dummy_input,), verbose=False)
+        flops, _ = thop.profile(net_fp32, inputs=(dummy_fp32,), verbose=False)
         gflops = round(flops / 1e9, 2)
-    except (ImportError, RuntimeError):
-        pass
+    except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+        print(f"[!] 提示: {name} GFLOPs 统计跳过 ({exc})")
 
-    def forward_fn():
+    # 1. FP32 测定
+    def forward_fp32():
         with torch.inference_mode():
-            return net(dummy_input)
+            return net_fp32(dummy_fp32)
+
+    # 2. FP16 测定 (支持静态与 autocast 稳健回退)
+    try:
+        net_fp16 = copy.deepcopy(net_fp32).half()
+        dummy_fp16 = [img.half() for img in dummy_fp32]
+        with torch.inference_mode():
+            _ = net_fp16(dummy_fp16)
+
+        def forward_fp16():
+            with torch.inference_mode():
+                return net_fp16(dummy_fp16)
+
+    except Exception:
+        # 若 torchvision 某些特异算子不支持纯 half，则在外层开启 autocast
+        def forward_fp16():
+            with torch.inference_mode(), torch.autocast("cuda", dtype=torch.float16):
+                return net_fp32(dummy_fp32)
+
+    # 3. BF16 测定
+    try:
+        net_bf16 = copy.deepcopy(net_fp32).bfloat16()
+        dummy_bf16 = [img.bfloat16() for img in dummy_fp32]
+        with torch.inference_mode():
+            _ = net_bf16(dummy_bf16)
+
+        def forward_bf16():
+            with torch.inference_mode():
+                return net_bf16(dummy_bf16)
+
+    except Exception:
+
+        def forward_bf16():
+            with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+                return net_fp32(dummy_fp32)
 
     return {
         "params_m": params_m,
         "gflops": gflops,
-        "fp32": measure_latency(forward_fn, use_fp16=False),
-        "fp16": measure_latency(forward_fn, use_fp16=True),
+        "fp32": measure_latency(forward_fp32),
+        "fp16": measure_latency(forward_fp16),
+        "bf16": measure_latency(forward_bf16),
         "notes": "torchvision 架构; forward 内含 RPN 与 RoI-NMS",
     }
 
@@ -167,22 +236,28 @@ def main():
             results[name] = benchmark_torchvision(name, root, device, args.imgsz)
 
     # 打印排版表格
-    print("\n" + "=" * 92)
-    header = f"| {'Model':<20} | {'Params (M)':<10} | {'GFLOPs':<8} | {'FP32 (ms)':<10} | {'FP32 FPS':<9} | {'FP16 (ms)':<10} | {'FP16 FPS':<9} |"
+    print("\n" + "=" * 115)
+    header = (
+        f"| {'Model':<20} | {'Params(M)':<9} | {'GFLOPs':<7} | "
+        f"{'FP32(ms)':<9} | {'FP16(ms)':<9} | {'FP16 FPS':<9} | "
+        f"{'BF16(ms)':<9} | {'BF16 FPS':<9} |"
+    )
     print(header)
     print(
         "|"
         + "-" * 22
         + "|"
-        + "-" * 12
+        + "-" * 11
         + "|"
-        + "-" * 10
-        + "|"
-        + "-" * 12
+        + "-" * 9
         + "|"
         + "-" * 11
         + "|"
-        + "-" * 12
+        + "-" * 11
+        + "|"
+        + "-" * 11
+        + "|"
+        + "-" * 11
         + "|"
         + "-" * 11
         + "|"
@@ -190,11 +265,16 @@ def main():
 
     for name, r in results.items():
         gflops_str = f"{r['gflops']:.2f}" if r["gflops"] else "N/A"
-        fp32_str = f"{r['fp32']['mean_ms']:.2f}±{r['fp32']['std_ms']:.2f}"
-        fp16_str = f"{r['fp16']['mean_ms']:.2f}±{r['fp16']['std_ms']:.2f}"
-        row = f"| {name:<20} | {r['params_m']:<10.2f} | {gflops_str:<8} | {fp32_str:<10} | {r['fp32']['fps']:<9.1f} | {fp16_str:<10} | {r['fp16']['fps']:<9.1f} |"
+        fp32_str = f"{r['fp32']['mean_ms']:.2f}"
+        fp16_str = f"{r['fp16']['mean_ms']:.2f}"
+        bf16_str = f"{r['bf16']['mean_ms']:.2f}"
+        row = (
+            f"| {name:<20} | {r['params_m']:<9.2f} | {gflops_str:<7} | "
+            f"{fp32_str:<9} | {fp16_str:<9} | {r['fp16']['fps']:<9.1f} | "
+            f"{bf16_str:<9} | {r['bf16']['fps']:<9.1f} |"
+        )
         print(row)
-    print("=" * 92 + "\n")
+    print("=" * 115 + "\n")
 
     # 写入 JSON
     out_file = (root / args.out).resolve()

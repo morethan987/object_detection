@@ -1,0 +1,23 @@
+{
+  "model_pred_file": "/root/autodl-tmp/object_detection/runs/rtdetr_l/predict_coco.json",
+  "gt_file": "/root/autodl-tmp/object_detection/data/coco/annotations/test.json",
+  "coco_eval_standard": {
+    "mAP_50_95": 0.3048,
+    "mAP_50": 0.5073,
+    "mAP_75": 0.2989,
+    "AP_s": 0.0019,
+    "AP_m": 0.0649,
+    "AP_l": 0.444,
+    "AR_max_300": 0.46
+  },
+  "engineering_metrics": {
+    "conf_threshold": 0.25,
+    "iou_threshold": 0.5,
+    "precision": 0.3764,
+    "recall": 0.5958,
+    "f1": 0.4613,
+    "tp": 653,
+    "fp": 1082,
+    "fn": 443
+  }
+}
